@@ -34,6 +34,7 @@ message PreprocessingStep {
     RandomRotation90 random_rotation90 = 26;
     RGBtoGray rgb_to_gray = 27;
     ConvertClassLogitsToSoftmax convert_class_logits_to_softmax = 28;
+    RandomNoise random_noise = 29;
   }
 }
 
@@ -45,6 +46,12 @@ message NormalizeImage {
   optional float original_maxval = 2;
   optional float target_minval = 3 [default=0];
   optional float target_maxval = 4 [default=1];
+}
+
+message RandomNoise {
+  optional float min_std = 1 [default=0.0];
+  optional float max_std = 2 [default=10.0];
+  optional bool color = 3 [default=false];
 }
 
 // Randomly horizontally flips the image and detections 50% of the time.

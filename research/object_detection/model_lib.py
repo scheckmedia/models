@@ -640,6 +640,8 @@ def create_estimator_and_inputs(run_config,
     pipeline_config_final = create_pipeline_proto_from_configs(configs)
     config_util.save_pipeline_config(pipeline_config_final, estimator.model_dir)
 
+  eval_interval_secs = eval_config.eval_interval_secs
+
   return dict(
       estimator=estimator,
       train_input_fn=train_input_fn,
@@ -647,7 +649,8 @@ def create_estimator_and_inputs(run_config,
       eval_input_names=eval_input_names,
       eval_on_train_input_fn=eval_on_train_input_fn,
       predict_input_fn=predict_input_fn,
-      train_steps=train_steps)
+      train_steps=train_steps,
+      eval_interval_secs = eval_interval_secs)
 
 
 def create_train_and_eval_specs(train_input_fn,
@@ -656,6 +659,7 @@ def create_train_and_eval_specs(train_input_fn,
                                 predict_input_fn,
                                 train_steps,
                                 eval_on_train_data=False,
+                                eval_interval_secs=300,
                                 final_exporter_name='Servo',
                                 eval_spec_names=None):
   """Creates a `TrainSpec` and `EvalSpec`s.
@@ -695,12 +699,14 @@ def create_train_and_eval_specs(train_input_fn,
       exporter_name = '{}_{}'.format(final_exporter_name, eval_spec_name)
     exporter = tf.estimator.FinalExporter(
         name=exporter_name, serving_input_receiver_fn=predict_input_fn)
+
     eval_specs.append(
         tf.estimator.EvalSpec(
             name=eval_spec_name,
             input_fn=eval_input_fn,
-            steps=None,
-            exporters=exporter))
+            steps=100,
+            exporters=exporter,
+            throttle_secs=eval_interval_secs))
 
   if eval_on_train_data:
     eval_specs.append(

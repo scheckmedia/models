@@ -40,6 +40,7 @@ class PreprocessorCache(object):
   ADJUST_CONTRAST = 'adjust_contrast'
   ADJUST_HUE = 'adjust_hue'
   ADJUST_SATURATION = 'adjust_saturation'
+  NOISE = 'random_noise'
   DISTORT_COLOR = 'distort_color'
   STRICT_CROP_IMAGE = 'strict_crop_image'
   CROP_IMAGE = 'crop_image'
@@ -60,7 +61,7 @@ class PreprocessorCache(object):
                 ADJUST_HUE, ADJUST_SATURATION, DISTORT_COLOR, STRICT_CROP_IMAGE,
                 CROP_IMAGE, PAD_IMAGE, CROP_TO_ASPECT_RATIO, RESIZE_METHOD,
                 PAD_TO_ASPECT_RATIO, BLACK_PATCHES, ADD_BLACK_PATCH, SELECTOR,
-                SELECTOR_TUPLES, SSD_CROP_SELECTOR_ID, SSD_CROP_PAD_SELECTOR_ID]
+                SELECTOR_TUPLES, SSD_CROP_SELECTOR_ID, SSD_CROP_PAD_SELECTOR_ID, NOISE]
 
   def __init__(self):
     self._history = defaultdict(dict)

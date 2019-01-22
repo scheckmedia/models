@@ -3048,6 +3048,31 @@ def convert_class_logits_to_softmax(multiclass_scores, temperature=1.0):
 
   return multiclass_scores
 
+def random_noise(image,
+                 min_std=0.0,
+                 max_std=10.0,
+                 color=False,
+                 seed=None,
+                 preprocess_vars_cache=None):
+  with tf.name_scope('RandomNoise', values=[image]):
+    image_shape = tf.shape(image)
+    if not color:
+      image_shape = image_shape[:-1]
+
+    generator_func = functools.partial(tf.random_normal, image_shape,
+                                       min_std, max_std, seed=seed)
+    noise = _get_or_create_preprocess_rand_vars(
+        generator_func,
+        preprocessor_cache.PreprocessorCache.NOISE,
+        preprocess_vars_cache)
+
+    if not color:
+      noise = tf.stack([noise, noise, noise], axis=-1)
+
+    image = tf.to_float(image)
+    image = tf.add(image, noise)
+    image = tf.clip_by_value(image, clip_value_min=0.0, clip_value_max=255.0)
+    return image
 
 def get_default_func_arg_map(include_label_weights=True,
                              include_label_confidences=False,
@@ -3223,6 +3248,7 @@ def get_default_func_arg_map(include_label_weights=True,
           groundtruth_keypoints,
       ),
       convert_class_logits_to_softmax: (multiclass_scores,),
+      random_noise: (fields.InputDataFields.image,),
   }
 
   return prep_func_arg_map
