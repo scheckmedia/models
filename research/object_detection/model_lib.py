@@ -452,6 +452,7 @@ def create_model_fn(detection_model_fn, configs, hparams, use_tpu=False):
             train_config.keep_checkpoint_every_n_hours)
         saver = tf.train.Saver(
             variables_to_restore,
+            max_to_keep=None,
             keep_checkpoint_every_n_hours=keep_checkpoint_every_n_hours)
         scaffold = tf.train.Scaffold(saver=saver)
 
@@ -471,6 +472,7 @@ def create_model_fn(detection_model_fn, configs, hparams, use_tpu=False):
             train_config.keep_checkpoint_every_n_hours)
         saver = tf.train.Saver(
             sharded=True,
+            max_to_keep=None,
             keep_checkpoint_every_n_hours=keep_checkpoint_every_n_hours,
             save_relative_paths=True)
         tf.add_to_collection(tf.GraphKeys.SAVERS, saver)
