@@ -103,6 +103,8 @@ PREPROCESSING_FUNCTION_MAP = {
         preprocessor.subtract_channel_mean,
     'convert_class_logits_to_softmax':
         preprocessor.convert_class_logits_to_softmax,
+    'random_noise':
+        preprocessor.random_noise
 }
 
 

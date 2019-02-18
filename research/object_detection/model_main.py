@@ -53,13 +53,18 @@ flags.DEFINE_boolean(
     'run_once', False, 'If running in eval-only mode, whether to run just '
     'one round of eval vs running continuously (default).'
 )
+flags.DEFINE_integer('save_checkpoint_secs', 600, ' Save checkpoints every this many seconds.')
+
 FLAGS = flags.FLAGS
 
 
 def main(unused_argv):
   flags.mark_flag_as_required('model_dir')
   flags.mark_flag_as_required('pipeline_config_path')
-  config = tf.estimator.RunConfig(model_dir=FLAGS.model_dir)
+  config = tf.estimator.RunConfig(
+      model_dir=FLAGS.model_dir,
+      save_checkpoints_secs=FLAGS.save_checkpoint_secs
+    )
 
   train_and_eval_dict = model_lib.create_estimator_and_inputs(
       run_config=config,
@@ -75,6 +80,7 @@ def main(unused_argv):
   eval_on_train_input_fn = train_and_eval_dict['eval_on_train_input_fn']
   predict_input_fn = train_and_eval_dict['predict_input_fn']
   train_steps = train_and_eval_dict['train_steps']
+  eval_interval_secs = train_and_eval_dict['eval_interval_secs']
 
   if FLAGS.checkpoint_dir:
     if FLAGS.eval_training_data:
@@ -99,6 +105,7 @@ def main(unused_argv):
         eval_on_train_input_fn,
         predict_input_fn,
         train_steps,
+        eval_interval_secs=eval_interval_secs,
         eval_on_train_data=False)
 
     # Currently only a single Eval Spec is allowed.
