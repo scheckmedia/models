@@ -3059,19 +3059,32 @@ def random_noise(image,
     if not color:
       image_shape = image_shape[:-1]
 
-    generator_func = functools.partial(tf.random_normal, image_shape,
-                                       min_std, max_std, seed=seed)
-    noise = _get_or_create_preprocess_rand_vars(
+    generator_func = functools.partial(tf.random_uniform, [], seed=seed)
+    delta = _get_or_create_preprocess_rand_vars(
         generator_func,
-        preprocessor_cache.PreprocessorCache.NOISE,
+        preprocessor_cache.PreprocessorCache.NOISE_COND,
         preprocess_vars_cache)
 
-    if not color:
-      noise = tf.stack([noise, noise, noise], axis=-1)
+    do_apply_noise = tf.greater(delta, 0.5)
 
-    image = tf.to_float(image)
-    image = tf.add(image, noise)
-    image = tf.clip_by_value(image, clip_value_min=0.0, clip_value_max=255.0)
+    def _apply_noise(delta, image):
+      generator_func = functools.partial(tf.random_normal, image_shape,
+                                       min_std * delta, max_std * delta, seed=seed)
+      noise = _get_or_create_preprocess_rand_vars(
+          generator_func,
+          preprocessor_cache.PreprocessorCache.NOISE,
+          preprocess_vars_cache)
+
+      if not color:
+        noise = tf.stack([noise, noise, noise], axis=-1)
+
+      image = tf.to_float(image)
+      image = tf.add(image, noise)
+      image = tf.clip_by_value(image, clip_value_min=0.0, clip_value_max=255.0)
+
+      return image
+
+    image = tf.cond(do_apply_noise, lambda: _apply_noise(delta, image), lambda: image)
     return image
 
 def get_default_func_arg_map(include_label_weights=True,
