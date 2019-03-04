@@ -3048,10 +3048,28 @@ def convert_class_logits_to_softmax(multiclass_scores, temperature=1.0):
 
   return multiclass_scores
 
+def _apply_noise(delta, image, min_std, max_std, image_shape, color, seed, preprocess_vars_cache=None):
+  generator_func = functools.partial(tf.random_normal, image_shape,
+                                    min_std * delta, max_std * delta, seed=seed)
+  noise = _get_or_create_preprocess_rand_vars(
+      generator_func,
+      preprocessor_cache.PreprocessorCache.NOISE,
+      preprocess_vars_cache)
+
+  if not color:
+    noise = tf.stack([noise, noise, noise], axis=-1)
+
+  image = tf.to_float(image)
+  image = tf.add(image, noise)
+  image = tf.clip_by_value(image, clip_value_min=0.0, clip_value_max=255.0)
+
+  return image
+
 def random_noise(image,
                  min_std=0.0,
                  max_std=10.0,
                  color=False,
+                 force=False,
                  seed=None,
                  preprocess_vars_cache=None):
   with tf.name_scope('RandomNoise', values=[image]):
@@ -3059,32 +3077,22 @@ def random_noise(image,
     if not color:
       image_shape = image_shape[:-1]
 
-    generator_func = functools.partial(tf.random_uniform, [], seed=seed)
-    delta = _get_or_create_preprocess_rand_vars(
-        generator_func,
-        preprocessor_cache.PreprocessorCache.NOISE_COND,
-        preprocess_vars_cache)
-
-    do_apply_noise = tf.greater(delta, 0.5)
-
-    def _apply_noise(delta, image):
-      generator_func = functools.partial(tf.random_normal, image_shape,
-                                       min_std * delta, max_std * delta, seed=seed)
-      noise = _get_or_create_preprocess_rand_vars(
+    if not force:
+      generator_func = functools.partial(tf.random_uniform, [], seed=seed)
+      delta = _get_or_create_preprocess_rand_vars(
           generator_func,
-          preprocessor_cache.PreprocessorCache.NOISE,
+          preprocessor_cache.PreprocessorCache.NOISE_COND,
           preprocess_vars_cache)
 
-      if not color:
-        noise = tf.stack([noise, noise, noise], axis=-1)
+      do_apply_noise = tf.greater(delta, 0.2)
+    else:
+      do_apply_noise = tf.constant(True, dtype=bool)
+      delta = 1.0
 
-      image = tf.to_float(image)
-      image = tf.add(image, noise)
-      image = tf.clip_by_value(image, clip_value_min=0.0, clip_value_max=255.0)
-
-      return image
-
-    image = tf.cond(do_apply_noise, lambda: _apply_noise(delta, image), lambda: image)
+    image = tf.cond(do_apply_noise,
+      lambda: _apply_noise(delta, image, min_std, max_std, image_shape, color, seed, preprocess_vars_cache),
+      lambda: image
+    )
     return image
 
 def get_default_func_arg_map(include_label_weights=True,
