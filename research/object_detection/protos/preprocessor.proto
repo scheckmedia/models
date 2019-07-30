@@ -54,6 +54,7 @@ message RandomNoise {
   optional float min_std = 1 [default=0.0];
   optional float max_std = 2 [default=10.0];
   optional bool color = 3 [default=false];
+  optional bool force = 4 [default=false];
 }
 
 // Randomly horizontally flips the image and detections 50% of the time.
