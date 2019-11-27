@@ -34,12 +34,12 @@ message PreprocessingStep {
     RandomRotation90 random_rotation90 = 26;
     RGBtoGray rgb_to_gray = 27;
     ConvertClassLogitsToSoftmax convert_class_logits_to_softmax = 28;
-    RandomNoise random_noise = 29;
     RandomAbsolutePadImage random_absolute_pad_image = 29;
     RandomSelfConcatImage random_self_concat_image = 30;
     AutoAugmentImage autoaugment_image = 31;
     DropLabelProbabilistically drop_label_probabilistically = 32;
     RemapLabels remap_labels = 33;
+    RandomNoise random_noise = 34;
   }
 }
 
