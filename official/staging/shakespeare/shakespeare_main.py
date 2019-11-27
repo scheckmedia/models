@@ -18,10 +18,11 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import functools
 import os
 
 # pylint: disable=wrong-import-order
-from absl import app as absl_app
+from absl import app
 from absl import flags
 import numpy as np
 import tensorflow as tf
@@ -45,16 +46,19 @@ def define_flags():
                          train_epochs=True,
                          epochs_between_evals=False,
                          stop_threshold=False,
+                         num_gpu=True,
                          hooks=False,
                          export_dir=False,
-                         run_eagerly=True)
+                         run_eagerly=True,
+                         distribution_strategy=True)
 
   flags_core.define_performance(num_parallel_calls=False,
                                 inter_op=False,
                                 intra_op=False,
                                 synthetic_data=False,
                                 max_train_steps=False,
-                                dtype=False,
+                                dtype=True,
+                                loss_scale=True,
                                 enable_xla=True,
                                 force_v2_in_keras_compile=True)
 
@@ -78,6 +82,7 @@ def define_flags():
   flags.DEFINE_string(
       name='training_data', default=None,
       help='Path to file containing the training data.')
+  flags.DEFINE_boolean(name='cudnn', default=True, help='Use CuDNN LSTM.')
 
 
 def get_dataset(path_to_file, batch_size=None, seq_length=SEQ_LENGTH):
@@ -92,7 +97,7 @@ def get_dataset(path_to_file, batch_size=None, seq_length=SEQ_LENGTH):
     A tuple, consisting of the Dataset and the class to character mapping
     and character to class mapping.
   """
-  with open(path_to_file, 'rb') as train_data:
+  with tf.io.gfile.GFile(path_to_file, 'rb') as train_data:
     text = train_data.read().decode(encoding='utf-8')
 
   # Create vocab
@@ -120,7 +125,8 @@ def build_model(vocab_size,
                 embedding_dim=EMBEDDING_DIM,
                 rnn_units=RNN_UNITS,
                 batch_size=None,
-                stateful=False):
+                stateful=False,
+                use_cudnn=True):
   """Builds the Shakespeare model.
 
   Args:
@@ -133,15 +139,26 @@ def build_model(vocab_size,
   Returns:
     A Keras Model.
   """
+  assert keras_utils.is_v2_0()
+  LSTM = functools.partial(tf.keras.layers.LSTM, implementation=2)
+
+  # By indirecting the activation through a lambda layer, the logic to dispatch
+  # to CuDNN in V2 doesn't trigger and we force the LSTM to run in non-CuDNN
+  # mode.
+  lstm_activation = ('tanh' if use_cudnn else
+                     lambda x: tf.math.tanh(x))
+
   batch_shape = [batch_size if stateful else None, None]
   return tf.keras.Sequential([
       tf.keras.layers.Embedding(vocab_size, embedding_dim,
                                 batch_input_shape=batch_shape),
-      tf.keras.layers.LSTM(rnn_units,
-                           return_sequences=True,
-                           stateful=stateful,
-                           recurrent_initializer='glorot_uniform'),
-      tf.keras.layers.Dense(vocab_size, activation='softmax')])
+      LSTM(rnn_units,
+           activation=lstm_activation,
+           return_sequences=True,
+           stateful=stateful,
+           recurrent_initializer='glorot_uniform'),
+      tf.keras.layers.Dense(vocab_size),
+      tf.keras.layers.Softmax(dtype=tf.float32)])
 
 
 def train_model(flags_obj, dataset, vocab_size, strategy, checkpoint_dir=None):
@@ -161,14 +178,18 @@ def train_model(flags_obj, dataset, vocab_size, strategy, checkpoint_dir=None):
   strategy_scope = distribution_utils.get_strategy_scope(strategy)
 
   with strategy_scope:
-    model = build_model(vocab_size=vocab_size, batch_size=flags_obj.batch_size)
-    model.compile(optimizer=tf.keras.optimizers.Adam(),
-                  loss=tf.keras.losses.CategoricalCrossentropy(),
-                  metrics=[
-                      tf.keras.metrics.Recall(top_k=1, name='RecallAt1'),
-                      tf.keras.metrics.Recall(top_k=5, name='RecallAt5')],
-                  run_eagerly=flags_obj.run_eagerly,
-                  run_distributed=flags_obj.force_v2_in_keras_compile)
+    model = build_model(vocab_size=vocab_size, batch_size=flags_obj.batch_size,
+                        use_cudnn=flags_obj.cudnn)
+
+   # When keras_use_ctl is False, Model.fit() automatically applies
+   # loss scaling so we don't need to create a LossScaleOptimizer.
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(),
+        loss=tf.keras.losses.CategoricalCrossentropy(),
+        metrics=[tf.keras.metrics.Recall(top_k=1, name='RecallAt1'),
+                 tf.keras.metrics.Recall(top_k=5, name='RecallAt5')],
+        run_eagerly=flags_obj.run_eagerly,
+        experimental_run_tf_function=flags_obj.force_v2_in_keras_compile)
 
   callbacks = []
   if checkpoint_dir:
@@ -244,6 +265,13 @@ def run(flags_obj):
         'https://storage.googleapis.com/download.tensorflow.org/data/'
         'shakespeare.txt')
 
+  if flags_obj.dtype == 'fp16':
+    policy = tf.keras.mixed_precision.experimental.Policy(
+        'mixed_float16',
+        loss_scale=flags_core.get_loss_scale(flags_obj,
+                                             default_for_fp16='dynamic'))
+    tf.keras.mixed_precision.experimental.set_policy(policy)
+
   keras_utils.set_session_config(
       enable_eager=flags_obj.enable_eager,
       enable_xla=flags_obj.enable_xla)
@@ -282,4 +310,4 @@ def main(_):
 
 if __name__ == '__main__':
   define_flags()
-  absl_app.run(main)
+  app.run(main)

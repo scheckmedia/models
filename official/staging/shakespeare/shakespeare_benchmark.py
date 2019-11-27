@@ -21,6 +21,7 @@ import os
 import time
 
 from absl import flags
+import tensorflow as tf  # pylint: disable=g-bad-import-order
 
 from official.staging.shakespeare import shakespeare_main
 from official.utils.flags import core as flags_core
@@ -28,6 +29,7 @@ from official.utils.misc import keras_utils
 from official.utils.testing.perfzero_benchmark import PerfZeroBenchmark
 
 SHAKESPEARE_TRAIN_DATA = 'shakespeare/shakespeare.txt'
+TMP_DIR = os.getenv('TMPDIR')
 FLAGS = flags.FLAGS
 
 
@@ -41,8 +43,8 @@ class ShakespeareBenchmarkBase(PerfZeroBenchmark):
         flag_methods=[shakespeare_main.define_flags])
 
   def _run_and_report_benchmark(self,
-                                top_1_train_min=0.923,
-                                top_1_train_max=0.93,
+                                top_1_train_min=0.91,
+                                top_1_train_max=0.94,
                                 warmup=1,
                                 log_steps=100):
     """Report benchmark results by writing to local protobuf file.
@@ -208,26 +210,11 @@ class ShakespeareAccuracy(ShakespeareBenchmarkBase):
     FLAGS.model_dir = ''
     self._run_and_report_benchmark()
 
-  def benchmark_xla_8_gpu(self):
-    """Benchmark 8 gpu w/xla.
-
-    This is test is for accuracy not scaling.  The batch-size is not scaled to
-    the number of gpus.
-    """
-    self._setup()
-    FLAGS.num_gpus = 8
-    FLAGS.training_data = self.train_data
-    FLAGS.batch_size = 64
-    FLAGS.train_epochs = 43
-    FLAGS.model_dir = ''
-    FLAGS.enable_xla = True
-    self._run_and_report_benchmark()
-
 
 class ShakespeareKerasBenchmarkReal(ShakespeareBenchmarkBase):
   """Benchmark accuracy tests."""
 
-  def __init__(self, output_dir=None, root_data_dir=None, **kwargs):
+  def __init__(self, output_dir=None, root_data_dir=TMP_DIR, **kwargs):
     """Benchmark tests w/Keras.
 
     Args:
@@ -289,6 +276,15 @@ class ShakespeareKerasBenchmarkReal(ShakespeareBenchmarkBase):
     FLAGS.batch_size = 64
     self._run_and_report_benchmark()
 
+  def benchmark_1_gpu_no_cudnn(self):
+    """Benchmark 1 gpu with CuDNN disabled."""
+    self._setup()
+    FLAGS.num_gpus = 1
+    FLAGS.batch_size = 64
+    FLAGS.cudnn = False
+    FLAGS.enable_eager = keras_utils.is_v2_0()
+    self._run_and_report_benchmark()
+
   def benchmark_1_gpu_no_ds(self):
     """Benchmark 1 gpu without distribution strategies."""
     self._setup()
@@ -323,12 +319,32 @@ class ShakespeareKerasBenchmarkReal(ShakespeareBenchmarkBase):
     FLAGS.enable_xla = True
     self._run_and_report_benchmark()
 
+  def benchmark_xla_1_gpu_no_cudnn(self):
+    """Benchmark 1 gpu w/xla and CuDNN disabled."""
+    self._setup()
+    FLAGS.num_gpus = 1
+    FLAGS.batch_size = 64
+    FLAGS.cudnn = False
+    FLAGS.enable_eager = keras_utils.is_v2_0()
+    FLAGS.enable_xla = True
+    self._run_and_report_benchmark()
+
   def benchmark_8_gpu(self):
     """Benchmark 8 gpu."""
     self._setup()
     FLAGS.num_gpus = 8
     FLAGS.batch_size = 64 * 8
     FLAGS.log_steps = 10
+    self._run_and_report_benchmark()
+
+  def benchmark_8_gpu_no_cudnn(self):
+    """Benchmark 8 gpu with CuDNN disabled."""
+    self._setup()
+    FLAGS.num_gpus = 8
+    FLAGS.batch_size = 64 * 8
+    FLAGS.log_steps = 10
+    FLAGS.cudnn = False
+    FLAGS.enable_eager = keras_utils.is_v2_0()
     self._run_and_report_benchmark()
 
   def benchmark_xla_8_gpu(self):
@@ -340,7 +356,22 @@ class ShakespeareKerasBenchmarkReal(ShakespeareBenchmarkBase):
     FLAGS.enable_xla = True
     self._run_and_report_benchmark()
 
+  def benchmark_xla_8_gpu_no_cudnn(self):
+    """Benchmark 8 gpu w/xla and CuDNN disabled."""
+    self._setup()
+    FLAGS.num_gpus = 8
+    FLAGS.batch_size = 64 * 8
+    FLAGS.log_steps = 10
+    FLAGS.cudnn = False
+    FLAGS.enable_eager = keras_utils.is_v2_0()
+    FLAGS.enable_xla = True
+    self._run_and_report_benchmark()
+
   def _run_and_report_benchmark(self):
     """Run and report benchmark."""
     super(ShakespeareKerasBenchmarkReal, self)._run_and_report_benchmark(
         top_1_train_min=None, log_steps=FLAGS.log_steps)
+
+
+if __name__ == '__main__':
+  tf.test.main()

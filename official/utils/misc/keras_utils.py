@@ -93,7 +93,8 @@ class TimeHistory(tf.keras.callbacks.Callback):
         (epoch, epoch_run_time))
 
 
-def get_profiler_callback(model_dir, profile_steps, enable_tensorboard):
+def get_profiler_callback(model_dir, profile_steps, enable_tensorboard,
+                          steps_per_epoch):
   """Validate profile_steps flag value and return profiler callback."""
   profile_steps_error_message = (
       'profile_steps must be a comma separated pair of positive integers, '
@@ -114,26 +115,39 @@ def get_profiler_callback(model_dir, profile_steps, enable_tensorboard):
         'TensorBoard callback profiles the 2nd step (unless otherwise '
         'specified). Please make sure the steps profiled by the two callbacks '
         'do not overlap.')
-
-  return ProfilerCallback(model_dir, start_step, stop_step)
+  return ProfilerCallback(model_dir, start_step, stop_step, steps_per_epoch)
 
 
 class ProfilerCallback(tf.keras.callbacks.Callback):
   """Save profiles in specified step range to log directory."""
 
-  def __init__(self, log_dir, start_step, stop_step):
+  def __init__(self, log_dir, start_step, stop_step, steps_per_epoch):
     super(ProfilerCallback, self).__init__()
     self.log_dir = log_dir
     self.start_step = start_step
     self.stop_step = stop_step
+    self.start_epoch = start_step // steps_per_epoch
+    self.stop_epoch = stop_step // steps_per_epoch
+    self.start_step_in_epoch = start_step % steps_per_epoch
+    self.stop_step_in_epoch = stop_step % steps_per_epoch
+    self.should_start = False
+    self.should_stop = False
+
+  def on_epoch_begin(self, epoch, logs=None):
+    if epoch == self.start_epoch:
+      self.should_start = True
+    if epoch == self.stop_epoch:
+      self.should_stop = True
 
   def on_batch_begin(self, batch, logs=None):
-    if batch == self.start_step:
+    if batch == self.start_step_in_epoch and self.should_start:
+      self.should_start = False
       profiler.start()
       tf.compat.v1.logging.info('Profiler started at Step %s', self.start_step)
 
   def on_batch_end(self, batch, logs=None):
-    if batch == self.stop_step:
+    if batch == self.stop_step_in_epoch and self.should_stop:
+      self.should_stop = False
       results = profiler.stop()
       profiler.save(self.log_dir, results)
       tf.compat.v1.logging.info(
@@ -142,17 +156,12 @@ class ProfilerCallback(tf.keras.callbacks.Callback):
 
 
 def set_session_config(enable_eager=False,
-                       enable_xla=False,
-                       enable_grappler_layout_optimizer=True):
+                       enable_xla=False):
   """Sets the session config."""
   if is_v2_0():
-    set_config_v2(
-        enable_xla=enable_xla,
-        enable_grappler_layout_optimizer=enable_grappler_layout_optimizer)
+    set_config_v2(enable_xla=enable_xla)
   else:
-    config = get_config_proto_v1(
-        enable_xla=enable_xla,
-        enable_grappler_layout_optimizer=enable_grappler_layout_optimizer)
+    config = get_config_proto_v1(enable_xla=enable_xla)
     if enable_eager:
       tf.compat.v1.enable_eager_execution(config=config)
     else:
@@ -160,8 +169,7 @@ def set_session_config(enable_eager=False,
       tf.keras.backend.set_session(sess)
 
 
-def get_config_proto_v1(enable_xla=False,
-                        enable_grappler_layout_optimizer=True):
+def get_config_proto_v1(enable_xla=False):
   """Return config proto according to flag settings, or None to use default."""
   config = None
   if enable_xla:
@@ -172,20 +180,10 @@ def get_config_proto_v1(enable_xla=False,
     # OOM and performance regression.
     config.graph_options.rewrite_options.pin_to_host_optimization = (
         rewriter_config_pb2.RewriterConfig.OFF)
-  # TODO(b/76028325): Remove when generic layout optimizer will be ready.
-  if not enable_grappler_layout_optimizer:
-    if config is None:
-      config = tf.compat.v1.ConfigProto()
-    # Disable LayoutOptimizer in grappler, because it might de-optimize fp16
-    # graphs, and force NCHW data format in all convolutions and batch
-    # normalizations.
-    config.graph_options.rewrite_options.layout_optimizer = (
-        rewriter_config_pb2.RewriterConfig.OFF)
   return config
 
 
-def set_config_v2(enable_xla=False,
-                  enable_grappler_layout_optimizer=False):
+def set_config_v2(enable_xla=False):
   """Config eager context according to flag values using TF 2.0 API."""
   if enable_xla:
     tf.config.optimizer.set_jit(True)
@@ -193,14 +191,6 @@ def set_config_v2(enable_xla=False,
     # causes OOM and performance regression.
     tf.config.optimizer.set_experimental_options(
         {'pin_to_host_optimization': False}
-    )
-  # TODO(b/76028325): Remove when generic layout optimizer will be ready.
-  if not enable_grappler_layout_optimizer:
-    # Disable LayoutOptimizer in grappler, because it might de-optimize fp16
-    # graphs, and force NCHW data format in all convolutions and batch
-    # normalizations.
-    tf.config.optimizer.set_experimental_options(
-        {'layout_optimizer': False}
     )
 
 
