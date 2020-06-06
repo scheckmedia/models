@@ -26,8 +26,8 @@ import collections
 
 
 class PreprocessorCache(object):
-    """Dictionary wrapper storing random variables generated during preprocessing.
-    """
+  """Dictionary wrapper storing random variables generated during preprocessing.
+  """
 
   # Constant keys representing different preprocessing functions
   ROTATION90 = 'rotation90'
