@@ -19,7 +19,7 @@ from __future__ import division
 # from __future__ import google_type_annotations
 from __future__ import print_function
 
-import tensorflow.compat.v2 as tf
+import tensorflow as tf
 
 from typing import Text, Optional
 from official.modeling.hyperparams import params_dict
@@ -28,7 +28,7 @@ from official.vision.detection.dataloader import mode_keys as ModeKeys
 
 
 class InputFn(object):
-  """Input function for tf.Estimator."""
+  """Input function that creates dataset from files."""
 
   def __init__(self,
                file_pattern: Text,
@@ -64,7 +64,7 @@ class InputFn(object):
         self._input_sharding = params.train.input_sharding
       else:
         self._input_sharding = params.eval.input_sharding
-    except KeyError:
+    except AttributeError:
       pass
 
   def __call__(self, ctx=None, batch_size: int = None):
@@ -85,16 +85,17 @@ class InputFn(object):
 
     if self._input_sharding and ctx and ctx.num_input_pipelines > 1:
       dataset = dataset.shard(ctx.num_input_pipelines, ctx.input_pipeline_id)
+    dataset = dataset.cache()
+
     if self._is_training:
       dataset = dataset.repeat()
 
     dataset = dataset.interleave(
-        map_func=lambda file_name: self._dataset_fn(file_name), cycle_length=32,
+        map_func=self._dataset_fn, cycle_length=32,
         num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    dataset = dataset.cache()
 
     if self._is_training:
-      dataset = dataset.shuffle(64)
+      dataset = dataset.shuffle(1000)
     if self._num_examples > 0:
       dataset = dataset.take(self._num_examples)
 

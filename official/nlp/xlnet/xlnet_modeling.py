@@ -102,52 +102,6 @@ def is_special_none_tensor(tensor):
   return tensor.shape.ndims == 0 and tensor.dtype == tf.int32
 
 
-def unpack_inputs(inputs):
-  """Unpacks a tuple of `inputs` tensors to a tuple.
-
-  Args:
-    inputs: A list of tensors.
-
-  Returns:
-    A tuple of tensors. If any input is a special constant tensor, replace it
-    with None.
-  """
-  inputs = tf.nest.flatten(inputs)
-  outputs = []
-  for x in inputs:
-    if is_special_none_tensor(x):
-      outputs.append(None)
-    else:
-      outputs.append(x)
-  x = tuple(outputs)
-
-  # To trick the very pointless 'unbalanced-tuple-unpacking' pylint check
-  # from triggering.
-  if len(x) == 1:
-    return x[0]
-  return tuple(outputs)
-
-
-def pack_inputs(inputs):
-  """Packs a list of `inputs` tensors to a tuple.
-
-  Args:
-    inputs: A list of tensors.
-
-  Returns:
-    A tuple of tensors. If any input is None, replace it with a special constant
-    tensor.
-  """
-  inputs = tf.nest.flatten(inputs)
-  outputs = []
-  for x in inputs:
-    if x is None:
-      outputs.append(tf.constant(0, shape=[], dtype=tf.int32))
-    else:
-      outputs.append(x)
-  return tuple(outputs)
-
-
 class PositionalEmbedding(tf.keras.layers.Layer):
   """Generates relative positional embeddings used in Transformer-XL and XLNet."""
 
@@ -160,14 +114,8 @@ class PositionalEmbedding(tf.keras.layers.Layer):
     self.inv_freq = 1.0 / (10000.0**(tf.range(0, self.dim, 2.0) / self.dim))
     super(PositionalEmbedding, self).build(unused_input_shapes)
 
-  def __call__(self, pos_seq, batch_size, **kwargs):
-    return super(PositionalEmbedding, self).__call__(
-        (pos_seq, batch_size), **kwargs)
-
-  def call(self, inputs):
+  def call(self, pos_seq, batch_size):
     """Implements call() for the layer."""
-    pos_seq, batch_size = inputs
-
     sinusoid_inp = tf.einsum('i,d->id', pos_seq, self.inv_freq)
     pos_emb = tf.concat([tf.sin(sinusoid_inp), tf.cos(sinusoid_inp)], -1)
     pos_emb = pos_emb[:, None, :]
@@ -194,18 +142,9 @@ class RelativeAttention(tf.keras.layers.Layer):
 
     super(RelativeAttention, self).build(unused_input_shapes)
 
-  def __call__(self, q_head, k_head_h, v_head_h, k_head_r, seg_embed, seg_mat,
-               r_w_bias, r_r_bias, r_s_bias, attn_mask, **kwargs):
-    inputs = pack_inputs([
-        q_head, k_head_h, v_head_h, k_head_r, seg_embed, seg_mat, r_w_bias,
-        r_r_bias, r_s_bias, attn_mask
-    ])
-    return super(RelativeAttention, self).__call__(inputs, **kwargs)
-
-  def call(self, inputs):
+  def call(self, q_head, k_head_h, v_head_h, k_head_r, seg_embed, seg_mat,
+           r_w_bias, r_r_bias, r_s_bias, attn_mask):
     """Implements call() for the layer."""
-    (q_head, k_head_h, v_head_h, k_head_r, seg_embed, seg_mat, r_w_bias,
-     r_r_bias, r_s_bias, attn_mask) = unpack_inputs(inputs)
 
     # content based attention score
     ac = tf.einsum('ibnd,jbnd->ijbn', q_head + r_w_bias, k_head_h)
@@ -361,18 +300,9 @@ class RelativeMultiheadAttention(tf.keras.layers.Layer):
 
     super(RelativeMultiheadAttention, self).build(unused_input_shapes)
 
-  def __call__(self, h, g, r, r_w_bias, r_r_bias, seg_mat, r_s_bias, seg_embed,
-               attn_mask_h, attn_mask_g, mems, target_mapping, **kwargs):
-    inputs = pack_inputs([
-        h, g, r, r_w_bias, r_r_bias, seg_mat, r_s_bias, seg_embed, attn_mask_h,
-        attn_mask_g, mems, target_mapping,
-    ])
-    return super(RelativeMultiheadAttention, self).__call__(inputs, **kwargs)
-
-  def call(self, inputs):
+  def call(self, h, g, r, r_w_bias, r_r_bias, seg_mat, r_s_bias, seg_embed,
+           attn_mask_h, attn_mask_g, mems, target_mapping):
     """Implements call() for the layer."""
-    (h, g, r, r_w_bias, r_r_bias, seg_mat, r_s_bias, seg_embed, attn_mask_h,
-     attn_mask_g, mems, target_mapping) = unpack_inputs(inputs)
 
     if mems is not None and mems.shape.ndims > 1:
       cat = tf.concat([mems, h], 0)
@@ -388,9 +318,10 @@ class RelativeMultiheadAttention(tf.keras.layers.Layer):
     k_head_r = tf.einsum('ibh,hnd->ibnd', r, self.kr_projection_layer)
 
     # core attention ops
-    attn_vec_h = self.relative_attention_layer(
-        q_head_h, k_head_h, v_head_h, k_head_r, seg_embed, seg_mat, r_w_bias,
-        r_r_bias, r_s_bias, attn_mask_h)
+    attn_vec_h = self.relative_attention_layer(q_head_h, k_head_h, v_head_h,
+                                               k_head_r, seg_embed, seg_mat,
+                                               r_w_bias, r_r_bias, r_s_bias,
+                                               attn_mask_h)
 
     # post processing
     output_h = tf.einsum('ibnd,hnd->ibh', attn_vec_h, self.proj_o)
@@ -403,15 +334,17 @@ class RelativeMultiheadAttention(tf.keras.layers.Layer):
       q_head_g = tf.einsum('ibh,hnd->ibnd', g, self.qh_projection_layer)
       if target_mapping is not None:
         q_head_g = tf.einsum('mbnd,mlb->lbnd', q_head_g, target_mapping)
-        attn_vec_g = self.relative_attention_layer(
-            q_head_g, k_head_h, v_head_h, k_head_r, seg_embed, seg_mat,
-            r_w_bias, r_r_bias, r_s_bias, attn_mask_g)
+        attn_vec_g = self.relative_attention_layer(q_head_g, k_head_h, v_head_h,
+                                                   k_head_r, seg_embed, seg_mat,
+                                                   r_w_bias, r_r_bias, r_s_bias,
+                                                   attn_mask_g)
         attn_vec_g = tf.einsum('lbnd,mlb->mbnd', attn_vec_g, target_mapping)
 
       else:
-        attn_vec_g = self.relative_attention_layer(
-            q_head_g, k_head_h, v_head_h, k_head_r, seg_embed, seg_mat,
-            r_w_bias, r_r_bias, r_s_bias, attn_mask_g)
+        attn_vec_g = self.relative_attention_layer(q_head_g, k_head_h, v_head_h,
+                                                   k_head_r, seg_embed, seg_mat,
+                                                   r_w_bias, r_r_bias, r_s_bias,
+                                                   attn_mask_g)
 
       # post processing
       output_g = tf.einsum('ibnd,hnd->ibh', attn_vec_g, self.proj_o)
@@ -865,7 +798,7 @@ class PretrainingXLNetModel(tf.keras.Model):
     mems = features.get('mems', None)
 
     transformerxl_output, self.new_mems, self.lookup_table = self.transformerxl_model(
-        inp_k=input_ids,
+        input_ids,
         seg_id=seg_ids,
         input_mask=None,
         mems=mems,
@@ -943,12 +876,10 @@ class ClassificationXLNetModel(tf.keras.Model):
     mems = features.get('mems', None)
 
     transformerxl_output, new_mems, self.lookup_table = (
-        self.transformerxl_model(
-            inp_k=input_ids, seg_id=seg_ids, input_mask=input_mask, mems=mems))
+        self.transformerxl_model(input_ids, seg_ids, input_mask, mems))
 
     summary = self.summarization_layer(transformerxl_output)
-    per_example_loss, logits = self.cl_loss_layer(
-        hidden=summary, labels=label)
+    per_example_loss, logits = self.cl_loss_layer(hidden=summary, labels=label)
     self.add_loss(tf.keras.backend.mean(per_example_loss))
     return new_mems, logits
 
@@ -1010,13 +941,8 @@ class LMLossLayer(tf.keras.layers.Layer):
 
     super(LMLossLayer, self).build(unused_input_shapes)
 
-  def __call__(self, hidden, target, lookup_table, target_mask, **kwargs):
-    inputs = pack_inputs([hidden, target, lookup_table, target_mask])
-    return super(LMLossLayer, self).__call__(inputs, **kwargs)
-
-  def call(self, inputs):
+  def call(self, hidden, target, lookup_table, target_mask):
     """Implements call() for the layer."""
-    (hidden, target, lookup_table, tgt_mask) = unpack_inputs(inputs)
     if self.use_proj:
       hidden = self.proj_layer_norm(self.proj_layer(hidden))
     if self.tie_weight:
@@ -1031,7 +957,7 @@ class LMLossLayer(tf.keras.layers.Layer):
       loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
           labels=target, logits=logits)
 
-    total_loss = tf.reduce_sum(loss * tgt_mask) / tf.reduce_sum(tgt_mask)
+    total_loss = tf.reduce_sum(loss * target_mask) / tf.reduce_sum(target_mask)
 
     return total_loss, logits
 
@@ -1093,7 +1019,8 @@ class Summarization(tf.keras.layers.Layer):
       summary = inputs[0]
     else:
       raise ValueError('Invalid summary type provided: %s' % self.summary_type)
-    summary = self.proj_layer(summary)
+    if self.use_proj:
+      summary = self.proj_layer(summary)
     summary = self.dropout_layer(summary)
     return summary
 
@@ -1121,13 +1048,8 @@ class ClassificationLossLayer(tf.keras.layers.Layer):
 
     super(ClassificationLossLayer, self).build(unused_input_shapes)
 
-  def __call__(self, hidden, labels, **kwargs):
-    inputs = pack_inputs([hidden, labels])
-    return super(ClassificationLossLayer, self).__call__(inputs, **kwargs)
-
-  def call(self, inputs):
+  def call(self, hidden, labels):
     """Implements call() for the layer."""
-    (hidden, labels) = unpack_inputs(inputs)
 
     logits = self.proj_layer(hidden)
     one_hot_target = tf.one_hot(labels, self.n_class, dtype=hidden.dtype)  # pytype: disable=attribute-error
@@ -1190,8 +1112,7 @@ class QAXLNetModel(tf.keras.Model):
     p_mask = features['p_mask']
 
     transformerxl_output, new_mems, self.lookup_table = (
-        self.transformerxl_model(
-            inp_k=input_ids, seg_id=seg_ids, input_mask=input_mask))
+        self.transformerxl_model(input_ids, seg_ids, input_mask))
 
     if training:
       loss, logits = self.qa_loss_layer(

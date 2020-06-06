@@ -15,7 +15,7 @@
 
 """Tests for preprocessor_builder."""
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from google.protobuf import text_format
 
@@ -722,6 +722,25 @@ class PreprocessorBuilderTest(tf.test.TestCase):
     function, args = preprocessor_builder.build(preprocessor_proto)
     self.assertEqual(function, preprocessor.convert_class_logits_to_softmax)
     self.assertEqual(args, {'temperature': 2})
+
+  def test_random_crop_by_scale(self):
+    preprocessor_text_proto = """
+    random_square_crop_by_scale {
+      scale_min: 0.25
+      scale_max: 2.0
+      num_scales: 8
+    }
+    """
+    preprocessor_proto = preprocessor_pb2.PreprocessingStep()
+    text_format.Merge(preprocessor_text_proto, preprocessor_proto)
+    function, args = preprocessor_builder.build(preprocessor_proto)
+    self.assertEqual(function, preprocessor.random_square_crop_by_scale)
+    self.assertEqual(args, {
+        'scale_min': 0.25,
+        'scale_max': 2.0,
+        'num_scales': 8,
+        'max_border': 128
+    })
 
 
 if __name__ == '__main__':

@@ -21,12 +21,11 @@ T.-Y. Lin, P. Goyal, R. Girshick, K. He,  and P. Dollar
 Focal Loss for Dense Object Detection. arXiv:1708.02002
 """
 
-import tensorflow.compat.v2 as tf
+import tensorflow as tf
 
 from official.vision.detection.dataloader import anchor
 from official.vision.detection.dataloader import mode_keys as ModeKeys
 from official.vision.detection.dataloader import tf_example_decoder
-from official.vision.detection.utils import autoaugment_utils
 from official.vision.detection.utils import box_utils
 from official.vision.detection.utils import input_utils
 
@@ -217,12 +216,6 @@ class Parser(object):
     # Gets original image and its size.
     image = data['image']
 
-    # NOTE: The autoaugment method works best when used alongside the standard
-    # horizontal flipping of images along with size jittering and normalization.
-    if self._use_autoaugment:
-      image, boxes = autoaugment_utils.distort_image_with_autoaugment(
-          image, boxes, self._autoaugment_policy_name)
-
     image_shape = tf.shape(input=image)[0:2]
 
     # Normalizes image with mean and std pixel values.
@@ -249,7 +242,7 @@ class Parser(object):
     image_scale = image_info[2, :]
     offset = image_info[3, :]
     boxes = input_utils.resize_and_crop_boxes(
-        boxes, image_scale, (image_height, image_width), offset)
+        boxes, image_scale, image_info[1, :], offset)
     # Filters out ground truth boxes that are all zeros.
     indices = box_utils.get_non_empty_box_indices(boxes)
     boxes = tf.gather(boxes, indices)
@@ -309,7 +302,7 @@ class Parser(object):
     image_scale = image_info[2, :]
     offset = image_info[3, :]
     boxes = input_utils.resize_and_crop_boxes(
-        boxes, image_scale, (image_height, image_width), offset)
+        boxes, image_scale, image_info[1, :], offset)
     # Filters out ground truth boxes that are all zeros.
     indices = box_utils.get_non_empty_box_indices(boxes)
     boxes = tf.gather(boxes, indices)
@@ -412,7 +405,7 @@ class Parser(object):
       image_scale = image_info[2, :]
       offset = image_info[3, :]
       boxes = input_utils.resize_and_crop_boxes(
-          boxes, image_scale, (image_height, image_width), offset)
+          boxes, image_scale, image_info[1, :], offset)
       # Filters out ground truth boxes that are all zeros.
       indices = box_utils.get_non_empty_box_indices(boxes)
       boxes = tf.gather(boxes, indices)

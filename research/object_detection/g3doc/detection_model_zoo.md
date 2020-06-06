@@ -1,9 +1,10 @@
 # Tensorflow detection model zoo
 
 We provide a collection of detection models pre-trained on the [COCO
-dataset](http://mscoco.org), the [Kitti dataset](http://www.cvlibs.net/datasets/kitti/),
-the [Open Images dataset](https://github.com/openimages/dataset), the
-[AVA v2.1 dataset](https://research.google.com/ava/) and the
+dataset](http://cocodataset.org), the [Kitti dataset](http://www.cvlibs.net/datasets/kitti/),
+the
+[Open Images dataset](https://storage.googleapis.com/openimages/web/index.html),
+the [AVA v2.1 dataset](https://research.google.com/ava/) and the
 [iNaturalist Species Detection Dataset](https://github.com/visipedia/inat_comp/blob/master/2017/README.md#bounding-boxes).
 These models can be useful for out-of-the-box inference if you are interested in
 categories already in those datasets. They are also useful for initializing your
@@ -106,15 +107,23 @@ Note: If you download the tar.gz file of quantized models and un-tar, you will g
 
 ### Mobile models
 
-Model name                                                                                                                          | Pixel 1 Latency (ms) | COCO mAP | Outputs
------------------------------------------------------------------------------------------------------------------------------------ | :------------------: | :------: | :-----:
-[ssd_mobilenet_v3_large_coco](http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v3_large_coco_2019_08_14.tar.gz) | 119                  | 22.3     | Boxes
-[ssd_mobilenet_v3_small_coco](http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v3_small_coco_2019_08_14.tar.gz) | 43                   | 15.6     | Boxes
+Model name                                                                                                                                                                | Pixel 1 Latency (ms) | COCO mAP | Outputs
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------: | :------: | :-----:
+[ssd_mobiledet_cpu_coco](http://download.tensorflow.org/models/object_detection/ssdlite_mobiledet_cpu_320x320_coco_2020_05_19.tar.gz)                                      |  113  |  24.0  |  Boxes
+[ssd_mobilenet_v2_mnasfpn_coco](http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v2_mnasfpn_shared_box_predictor_320x320_coco_sync_2020_05_18.tar.gz)  |  183  |  26.6  |  Boxes
+[ssd_mobilenet_v3_large_coco](http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v3_large_coco_2020_01_14.tar.gz)                                        |  119  |  22.6  |  Boxes
+[ssd_mobilenet_v3_small_coco](http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v3_small_coco_2020_01_14.tar.gz)                                        |  43   |  15.4  |  Boxes
 
 ### Pixel4 Edge TPU models
-Model name                                                                                                                          | Pixel 4  Edge TPU Latency (ms) | COCO mAP | Outputs
+Model name                                                                                                                          | Pixel 4  Edge TPU Latency (ms) | COCO mAP (fp32/uint8) | Outputs
 ----------------------------------------------------------------------------------------------------------------------------------- | :------------------: | :------: | :-----:
-[ssd_mobilenet_edgetpu_coco](https://storage.cloud.google.com/mobilenet_edgetpu/checkpoints/ssdlite_mobilenet_edgetpu_coco_quant.tar.gz) | 6.6                  | 24.3     | Boxes
+[ssd_mobiledet_edgetpu_coco](http://download.tensorflow.org/models/object_detection/ssdlite_mobiledet_edgetpu_320x320_coco_2020_05_19.tar.gz)  |  6.9  |  25.9/25.6  |  Boxes
+[ssd_mobilenet_edgetpu_coco](https://storage.cloud.google.com/mobilenet_edgetpu/checkpoints/ssdlite_mobilenet_edgetpu_coco_quant.tar.gz)       |  6.6  |  -/24.3     |  Boxes
+
+### Pixel4 DSP models
+Model name                                                                                                                          | Pixel 4  DSP Latency (ms) | COCO mAP (fp32/uint8) | Outputs
+----------------------------------------------------------------------------------------------------------------------------------- | :------------------: | :------: | :-----:
+[ssd_mobiledet_dsp_coco](http://download.tensorflow.org/models/object_detection/ssdlite_mobiledet_dsp_320x320_coco_2020_05_19.tar.gz)  |  12.3  |  28.9/28.8  |  Boxes
 
 ## Kitti-trained models
 

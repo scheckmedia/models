@@ -22,58 +22,62 @@ PreprocessorCache object, that function will perform the same augmentation
 on all calls.
 """
 
-from collections import defaultdict
+import collections
 
 
 class PreprocessorCache(object):
     """Dictionary wrapper storing random variables generated during preprocessing.
     """
 
-    # Constant keys representing different preprocessing functions
-    ROTATION90 = 'rotation90'
-    HORIZONTAL_FLIP = 'horizontal_flip'
-    VERTICAL_FLIP = 'vertical_flip'
-    PIXEL_VALUE_SCALE = 'pixel_value_scale'
-    IMAGE_SCALE = 'image_scale'
-    RGB_TO_GRAY = 'rgb_to_gray'
-    ADJUST_BRIGHTNESS = 'adjust_brightness'
-    ADJUST_CONTRAST = 'adjust_contrast'
-    ADJUST_HUE = 'adjust_hue'
-    ADJUST_SATURATION = 'adjust_saturation'
-    NOISE = 'random_noise'
-    NOISE_COND = 'random_noise_cond'
-    DISTORT_COLOR = 'distort_color'
-    STRICT_CROP_IMAGE = 'strict_crop_image'
-    CROP_IMAGE = 'crop_image'
-    PAD_IMAGE = 'pad_image'
-    CROP_TO_ASPECT_RATIO = 'crop_to_aspect_ratio'
-    RESIZE_METHOD = 'resize_method'
-    PAD_TO_ASPECT_RATIO = 'pad_to_aspect_ratio'
-    BLACK_PATCHES = 'black_patches'
-    ADD_BLACK_PATCH = 'add_black_patch'
-    SELECTOR = 'selector'
-    SELECTOR_TUPLES = 'selector_tuples'
-    SSD_CROP_SELECTOR_ID = 'ssd_crop_selector_id'
-    SSD_CROP_PAD_SELECTOR_ID = 'ssd_crop_pad_selector_id'
-    JPEG_QUALITY = 'jpeg_quality'
-    DOWNSCALE_TO_TARGET_PIXELS = 'downscale_to_target_pixels'
-    PATCH_GAUSSIAN = 'patch_gaussian'
+  # Constant keys representing different preprocessing functions
+  ROTATION90 = 'rotation90'
+  HORIZONTAL_FLIP = 'horizontal_flip'
+  VERTICAL_FLIP = 'vertical_flip'
+  PIXEL_VALUE_SCALE = 'pixel_value_scale'
+  IMAGE_SCALE = 'image_scale'
+  RGB_TO_GRAY = 'rgb_to_gray'
+  ADJUST_BRIGHTNESS = 'adjust_brightness'
+  ADJUST_CONTRAST = 'adjust_contrast'
+  ADJUST_HUE = 'adjust_hue'
+  ADJUST_SATURATION = 'adjust_saturation'
+  DISTORT_COLOR = 'distort_color'
+  STRICT_CROP_IMAGE = 'strict_crop_image'
+  CROP_IMAGE = 'crop_image'
+  PAD_IMAGE = 'pad_image'
+  CROP_TO_ASPECT_RATIO = 'crop_to_aspect_ratio'
+  RESIZE_METHOD = 'resize_method'
+  PAD_TO_ASPECT_RATIO = 'pad_to_aspect_ratio'
+  BLACK_PATCHES = 'black_patches'
+  ADD_BLACK_PATCH = 'add_black_patch'
+  SELECTOR = 'selector'
+  SELECTOR_TUPLES = 'selector_tuples'
+  SELF_CONCAT_IMAGE = 'self_concat_image'
+  SSD_CROP_SELECTOR_ID = 'ssd_crop_selector_id'
+  SSD_CROP_PAD_SELECTOR_ID = 'ssd_crop_pad_selector_id'
+  JPEG_QUALITY = 'jpeg_quality'
+  DOWNSCALE_TO_TARGET_PIXELS = 'downscale_to_target_pixels'
+  PATCH_GAUSSIAN = 'patch_gaussian'
+  SQUARE_CROP_BY_SCALE = 'square_crop_scale'
+  NOISE = 'random_noise'
+  NOISE_COND = 'random_noise_cond'
 
-    # 23 permitted function ids
-    _VALID_FNS = [ROTATION90, HORIZONTAL_FLIP, VERTICAL_FLIP, PIXEL_VALUE_SCALE,
-                  IMAGE_SCALE, RGB_TO_GRAY, ADJUST_BRIGHTNESS, ADJUST_CONTRAST,
-                  ADJUST_HUE, ADJUST_SATURATION, DISTORT_COLOR, STRICT_CROP_IMAGE,
-                  CROP_IMAGE, PAD_IMAGE, CROP_TO_ASPECT_RATIO, RESIZE_METHOD,
-                  PAD_TO_ASPECT_RATIO, BLACK_PATCHES, ADD_BLACK_PATCH, SELECTOR,
-                  SELECTOR_TUPLES, SSD_CROP_SELECTOR_ID, SSD_CROP_PAD_SELECTOR_ID, NOISE,
-                  NOISE_COND, JPEG_QUALITY, DOWNSCALE_TO_TARGET_PIXELS, PATCH_GAUSSIAN]
+  # 27 permitted function ids
+  _VALID_FNS = [ROTATION90, HORIZONTAL_FLIP, VERTICAL_FLIP, PIXEL_VALUE_SCALE,
+                IMAGE_SCALE, RGB_TO_GRAY, ADJUST_BRIGHTNESS, ADJUST_CONTRAST,
+                ADJUST_HUE, ADJUST_SATURATION, DISTORT_COLOR, STRICT_CROP_IMAGE,
+                CROP_IMAGE, PAD_IMAGE, CROP_TO_ASPECT_RATIO, RESIZE_METHOD,
+                PAD_TO_ASPECT_RATIO, BLACK_PATCHES, ADD_BLACK_PATCH, SELECTOR,
+                SELECTOR_TUPLES, SELF_CONCAT_IMAGE, SSD_CROP_SELECTOR_ID,
+                SSD_CROP_PAD_SELECTOR_ID, JPEG_QUALITY, NOISE_COND,
+                DOWNSCALE_TO_TARGET_PIXELS, PATCH_GAUSSIAN, NOISE,
+                SQUARE_CROP_BY_SCALE]
 
-    def __init__(self):
-        self._history = defaultdict(dict)
+  def __init__(self):
+    self._history = collections.defaultdict(dict)
 
-    def clear(self):
-        """Resets cache."""
-        self._history = defaultdict(dict)
+  def clear(self):
+    """Resets cache."""
+    self._history = collections.defaultdict(dict)
 
     def get(self, function_id, key):
         """Gets stored value given a function id and key.

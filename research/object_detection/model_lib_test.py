@@ -22,7 +22,7 @@ import functools
 import os
 
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from tensorflow.contrib.tpu.python.tpu import tpu_config
 from tensorflow.contrib.tpu.python.tpu import tpu_estimator
@@ -39,17 +39,34 @@ from object_detection.utils import config_util
 # 'ssd_inception_v2_pets', 'faster_rcnn_resnet50_pets'
 MODEL_NAME_FOR_TEST = 'ssd_inception_v2_pets'
 
+# Model for testing keypoints.
+MODEL_NAME_FOR_KEYPOINTS_TEST = 'ssd_mobilenet_v1_fpp'
 
-def _get_data_path():
+# Model for testing tfSequenceExample inputs.
+MODEL_NAME_FOR_SEQUENCE_EXAMPLE_TEST = 'context_rcnn_camera_trap'
+
+
+def _get_data_path(model_name):
   """Returns an absolute path to TFRecord file."""
-  return os.path.join(tf.resource_loader.get_data_files_path(), 'test_data',
-                      'pets_examples.record')
+  if model_name == MODEL_NAME_FOR_SEQUENCE_EXAMPLE_TEST:
+    return os.path.join(tf.resource_loader.get_data_files_path(), 'test_data',
+                        'snapshot_serengeti_sequence_examples.record')
+  else:
+    return os.path.join(tf.resource_loader.get_data_files_path(), 'test_data',
+                        'pets_examples.record')
 
 
 def get_pipeline_config_path(model_name):
   """Returns path to the local pipeline config file."""
-  return os.path.join(tf.resource_loader.get_data_files_path(), 'samples',
-                      'configs', model_name + '.config')
+  if model_name == MODEL_NAME_FOR_KEYPOINTS_TEST:
+    return os.path.join(tf.resource_loader.get_data_files_path(), 'test_data',
+                        model_name + '.config')
+  elif model_name == MODEL_NAME_FOR_SEQUENCE_EXAMPLE_TEST:
+    return os.path.join(tf.resource_loader.get_data_files_path(), 'test_data',
+                        model_name + '.config')
+  else:
+    return os.path.join(tf.resource_loader.get_data_files_path(), 'samples',
+                        'configs', model_name + '.config')
 
 
 def _get_labelmap_path():
@@ -58,11 +75,28 @@ def _get_labelmap_path():
                       'pet_label_map.pbtxt')
 
 
+def _get_keypoints_labelmap_path():
+  """Returns an absolute path to label map file."""
+  return os.path.join(tf.resource_loader.get_data_files_path(), 'data',
+                      'face_person_with_keypoints_label_map.pbtxt')
+
+
+def _get_sequence_example_labelmap_path():
+  """Returns an absolute path to label map file."""
+  return os.path.join(tf.resource_loader.get_data_files_path(), 'data',
+                      'snapshot_serengeti_label_map.pbtxt')
+
+
 def _get_configs_for_model(model_name):
   """Returns configurations for model."""
   filename = get_pipeline_config_path(model_name)
-  data_path = _get_data_path()
-  label_map_path = _get_labelmap_path()
+  data_path = _get_data_path(model_name)
+  if model_name == MODEL_NAME_FOR_KEYPOINTS_TEST:
+    label_map_path = _get_keypoints_labelmap_path()
+  elif model_name == MODEL_NAME_FOR_SEQUENCE_EXAMPLE_TEST:
+    label_map_path = _get_sequence_example_labelmap_path()
+  else:
+    label_map_path = _get_labelmap_path()
   configs = config_util.get_configs_from_pipeline_file(filename)
   override_dict = {
       'train_input_path': data_path,
@@ -83,7 +117,7 @@ def _make_initializable_iterator(dataset):
   Returns:
     A `tf.data.Iterator`.
   """
-  iterator = dataset.make_initializable_iterator()
+  iterator = tf.data.make_initializable_iterator(dataset)
   tf.add_to_collection(tf.GraphKeys.TABLE_INITIALIZERS, iterator.initializer)
   return iterator
 
@@ -183,6 +217,11 @@ class ModelLibTest(tf.test.TestCase):
     configs = _get_configs_for_model(MODEL_NAME_FOR_TEST)
     self._assert_model_fn_for_train_eval(configs, 'train')
 
+  def test_model_fn_in_train_mode_sequences(self):
+    """Tests the model function in TRAIN mode."""
+    configs = _get_configs_for_model(MODEL_NAME_FOR_SEQUENCE_EXAMPLE_TEST)
+    self._assert_model_fn_for_train_eval(configs, 'train')
+
   def test_model_fn_in_train_mode_freeze_all_variables(self):
     """Tests model_fn TRAIN mode with all variables frozen."""
     configs = _get_configs_for_model(MODEL_NAME_FOR_TEST)
@@ -213,6 +252,22 @@ class ModelLibTest(tf.test.TestCase):
     configs = _get_configs_for_model(MODEL_NAME_FOR_TEST)
     self._assert_model_fn_for_train_eval(configs, 'eval')
 
+  def test_model_fn_in_eval_mode_sequences(self):
+    """Tests the model function in EVAL mode."""
+    configs = _get_configs_for_model(MODEL_NAME_FOR_SEQUENCE_EXAMPLE_TEST)
+    self._assert_model_fn_for_train_eval(configs, 'eval')
+
+  def test_model_fn_in_keypoints_eval_mode(self):
+    """Tests the model function in EVAL mode with keypoints config."""
+    configs = _get_configs_for_model(MODEL_NAME_FOR_KEYPOINTS_TEST)
+    estimator_spec = self._assert_model_fn_for_train_eval(configs, 'eval')
+    metric_ops = estimator_spec.eval_metric_ops
+    self.assertIn('Keypoints_Precision/mAP ByCategory/face', metric_ops)
+    self.assertIn('Keypoints_Precision/mAP ByCategory/PERSON', metric_ops)
+    detection_keypoints = estimator_spec.predictions['detection_keypoints']
+    self.assertEqual(1, detection_keypoints.shape.as_list()[0])
+    self.assertEqual(tf.float32, detection_keypoints.dtype)
+
   def test_model_fn_in_eval_on_train_mode(self):
     """Tests the model function in EVAL mode with train data."""
     configs = _get_configs_for_model(MODEL_NAME_FOR_TEST)
@@ -229,6 +284,27 @@ class ModelLibTest(tf.test.TestCase):
     hparams = model_hparams.create_hparams(
         hparams_overrides='load_pretrained=false')
     pipeline_config_path = get_pipeline_config_path(MODEL_NAME_FOR_TEST)
+    train_steps = 20
+    train_and_eval_dict = model_lib.create_estimator_and_inputs(
+        run_config,
+        hparams,
+        pipeline_config_path,
+        train_steps=train_steps)
+    estimator = train_and_eval_dict['estimator']
+    train_steps = train_and_eval_dict['train_steps']
+    self.assertIsInstance(estimator, tf.estimator.Estimator)
+    self.assertEqual(20, train_steps)
+    self.assertIn('train_input_fn', train_and_eval_dict)
+    self.assertIn('eval_input_fns', train_and_eval_dict)
+    self.assertIn('eval_on_train_input_fn', train_and_eval_dict)
+
+  def test_create_estimator_and_inputs_sequence_example(self):
+    """Tests that Estimator and input function are constructed correctly."""
+    run_config = tf.estimator.RunConfig()
+    hparams = model_hparams.create_hparams(
+        hparams_overrides='load_pretrained=false')
+    pipeline_config_path = get_pipeline_config_path(
+        MODEL_NAME_FOR_SEQUENCE_EXAMPLE_TEST)
     train_steps = 20
     train_and_eval_dict = model_lib.create_estimator_and_inputs(
         run_config,

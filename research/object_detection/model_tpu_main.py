@@ -23,11 +23,20 @@ from __future__ import division
 from __future__ import print_function
 
 from absl import flags
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 
 from object_detection import model_hparams
 from object_detection import model_lib
+
+# pylint: disable=g-import-not-at-top
+try:
+  from tensorflow.contrib import cluster_resolver as contrib_cluster_resolver
+  from tensorflow.contrib import tpu as contrib_tpu
+except ImportError:
+  # TF 2.0 doesn't ship with contrib.
+  pass
+# pylint: enable=g-import-not-at-top
 
 tf.flags.DEFINE_bool('use_tpu', True, 'Use TPUs rather than plain CPUs')
 
@@ -76,6 +85,11 @@ flags.DEFINE_string(
     'where event and checkpoint files will be written.')
 flags.DEFINE_string('pipeline_config_path', None, 'Path to pipeline config '
                     'file.')
+flags.DEFINE_integer(
+    'max_eval_retries', 0, 'If running continuous eval, the maximum number of '
+    'retries upon encountering tf.errors.InvalidArgumentError. If negative, '
+    'will always retry the evaluation.'
+)
 
 FLAGS = tf.flags.FLAGS
 
@@ -85,17 +99,15 @@ def main(unused_argv):
   flags.mark_flag_as_required('pipeline_config_path')
 
   tpu_cluster_resolver = (
-      tf.contrib.cluster_resolver.TPUClusterResolver(
-          tpu=[FLAGS.tpu_name],
-          zone=FLAGS.tpu_zone,
-          project=FLAGS.gcp_project))
+      contrib_cluster_resolver.TPUClusterResolver(
+          tpu=[FLAGS.tpu_name], zone=FLAGS.tpu_zone, project=FLAGS.gcp_project))
   tpu_grpc_url = tpu_cluster_resolver.get_master()
 
-  config = tf.contrib.tpu.RunConfig(
+  config = contrib_tpu.RunConfig(
       master=tpu_grpc_url,
       evaluation_master=tpu_grpc_url,
       model_dir=FLAGS.model_dir,
-      tpu_config=tf.contrib.tpu.TPUConfig(
+      tpu_config=contrib_tpu.TPUConfig(
           iterations_per_loop=FLAGS.iterations_per_loop,
           num_shards=FLAGS.num_shards))
 
@@ -135,7 +147,7 @@ def main(unused_argv):
       # Currently only a single eval input is allowed.
       input_fn = eval_input_fns[0]
     model_lib.continuous_eval(estimator, FLAGS.model_dir, input_fn, train_steps,
-                              name)
+                              name, FLAGS.max_eval_retries)
 
 
 if __name__ == '__main__':

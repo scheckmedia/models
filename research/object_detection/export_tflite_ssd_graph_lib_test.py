@@ -1,3 +1,4 @@
+# Lint as: python2, python3
 # Copyright 2018 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +20,9 @@ from __future__ import print_function
 import os
 import numpy as np
 import six
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+import tf_slim as slim
+
 from tensorflow.core.framework import types_pb2
 from object_detection import export_tflite_ssd_graph_lib
 from object_detection import exporter
@@ -30,10 +33,13 @@ from object_detection.protos import graph_rewriter_pb2
 from object_detection.protos import pipeline_pb2
 from object_detection.protos import post_processing_pb2
 
+# pylint: disable=g-import-not-at-top
+
 if six.PY2:
-  import mock  # pylint: disable=g-import-not-at-top
+  import mock
 else:
-  from unittest import mock  # pylint: disable=g-import-not-at-top
+  from unittest import mock  # pylint: disable=g-importing-member
+# pylint: enable=g-import-not-at-top
 
 
 class FakeModel(model.DetectionModel):
@@ -45,7 +51,7 @@ class FakeModel(model.DetectionModel):
     pass
 
   def predict(self, preprocessed_inputs, true_image_shapes):
-    features = tf.contrib.slim.conv2d(preprocessed_inputs, 3, 1)
+    features = slim.conv2d(preprocessed_inputs, 3, 1)
     with tf.control_dependencies([features]):
       prediction_tensors = {
           'box_encodings':
@@ -105,17 +111,17 @@ class ExportTfliteGraphTest(tf.test.TestCase):
         saver.save(sess, checkpoint_path)
 
   def _assert_quant_vars_exists(self, tflite_graph_file):
-    with tf.gfile.Open(tflite_graph_file) as f:
+    with tf.gfile.Open(tflite_graph_file, mode='rb') as f:
       graph_string = f.read()
       print(graph_string)
-      self.assertTrue('quant' in graph_string)
+      self.assertIn(six.ensure_binary('quant'), graph_string)
 
   def _import_graph_and_run_inference(self, tflite_graph_file, num_channels=3):
     """Imports a tflite graph, runs single inference and returns outputs."""
     graph = tf.Graph()
     with graph.as_default():
       graph_def = tf.GraphDef()
-      with tf.gfile.Open(tflite_graph_file) as f:
+      with tf.gfile.Open(tflite_graph_file, mode='rb') as f:
         graph_def.ParseFromString(f.read())
       tf.import_graph_def(graph_def, name='')
       input_tensor = graph.get_tensor_by_name('normalized_input_image_tensor:0')
@@ -330,21 +336,21 @@ class ExportTfliteGraphTest(tf.test.TestCase):
     graph = tf.Graph()
     with graph.as_default():
       graph_def = tf.GraphDef()
-      with tf.gfile.Open(tflite_graph_file) as f:
+      with tf.gfile.Open(tflite_graph_file, mode='rb') as f:
         graph_def.ParseFromString(f.read())
       all_op_names = [node.name for node in graph_def.node]
       self.assertIn('TFLite_Detection_PostProcess', all_op_names)
       self.assertNotIn('UnattachedTensor', all_op_names)
       for node in graph_def.node:
         if node.name == 'TFLite_Detection_PostProcess':
-          self.assertTrue(node.attr['_output_quantized'].b is True)
+          self.assertTrue(node.attr['_output_quantized'].b)
           self.assertTrue(
-              node.attr['_support_output_type_float_in_quantized_op'].b is True)
-          self.assertTrue(node.attr['y_scale'].f == 10.0)
-          self.assertTrue(node.attr['x_scale'].f == 10.0)
-          self.assertTrue(node.attr['h_scale'].f == 5.0)
-          self.assertTrue(node.attr['w_scale'].f == 5.0)
-          self.assertTrue(node.attr['num_classes'].i == 2)
+              node.attr['_support_output_type_float_in_quantized_op'].b)
+          self.assertEqual(node.attr['y_scale'].f, 10.0)
+          self.assertEqual(node.attr['x_scale'].f, 10.0)
+          self.assertEqual(node.attr['h_scale'].f, 5.0)
+          self.assertEqual(node.attr['w_scale'].f, 5.0)
+          self.assertEqual(node.attr['num_classes'].i, 2)
           self.assertTrue(
               all([
                   t == types_pb2.DT_FLOAT
@@ -362,7 +368,7 @@ class ExportTfliteGraphTest(tf.test.TestCase):
     graph = tf.Graph()
     with graph.as_default():
       graph_def = tf.GraphDef()
-      with tf.gfile.Open(tflite_graph_file) as f:
+      with tf.gfile.Open(tflite_graph_file, mode='rb') as f:
         graph_def.ParseFromString(f.read())
       all_op_names = [node.name for node in graph_def.node]
       self.assertIn('UnattachedTensor', all_op_names)
@@ -381,7 +387,7 @@ class ExportTfliteGraphTest(tf.test.TestCase):
     graph = tf.Graph()
     with graph.as_default():
       graph_def = tf.GraphDef()
-      with tf.gfile.Open(tflite_graph_file) as f:
+      with tf.gfile.Open(tflite_graph_file, mode='rb') as f:
         graph_def.ParseFromString(f.read())
       all_op_names = [node.name for node in graph_def.node]
       self.assertIn('TFLite_Detection_PostProcess', all_op_names)

@@ -47,7 +47,7 @@ BERT_V2_NAME_REPLACEMENTS = (
     ("embeddings/position_embeddings", "position_embedding/embeddings"),
     ("embeddings/LayerNorm", "embeddings/layer_norm"),
     ("attention/self", "self_attention"),
-    ("attention/output/dense", "self_attention_output"),
+    ("attention/output/dense", "self_attention/attention_output"),
     ("attention/output/LayerNorm", "self_attention_layer_norm"),
     ("intermediate/dense", "intermediate"),
     ("output/dense", "output"),
@@ -94,13 +94,13 @@ def _get_permutation(name, permutations):
 
 def _get_new_shape(name, shape, num_heads):
   """Checks whether a variable requires reshape by pattern matching."""
-  if "attention/output/dense/kernel" in name:
+  if "self_attention/attention_output/kernel" in name:
     return tuple([num_heads, shape[0] // num_heads, shape[1]])
-  if "attention/output/dense/bias" in name:
+  if "self_attention/attention_output/bias" in name:
     return shape
 
   patterns = [
-      "attention/self/query", "attention/self/value", "attention/self/key"
+      "self_attention/query", "self_attention/value", "self_attention/key"
   ]
   for pattern in patterns:
     if pattern in name:
@@ -161,7 +161,7 @@ def convert(checkpoint_from_path,
       # See if we need to reshape the underlying tensor.
       new_shape = None
       if num_heads > 0:
-        new_shape = _get_new_shape(var_name, tensor.shape, num_heads)
+        new_shape = _get_new_shape(new_var_name, tensor.shape, num_heads)
       if new_shape:
         tf.logging.info("Veriable %s has a shape change from %s to %s",
 
@@ -188,7 +188,7 @@ def convert(checkpoint_from_path,
     with tf.Session() as sess:
       sess.run(tf.global_variables_initializer())
       tf.logging.info("Writing checkpoint_to_path %s", checkpoint_to_path)
-      saver.save(sess, checkpoint_to_path)
+      saver.save(sess, checkpoint_to_path, write_meta_graph=False)
 
   tf.logging.info("Summary:")
   tf.logging.info("  Converted %d variable name(s).", len(new_variable_map))

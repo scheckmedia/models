@@ -37,19 +37,27 @@ from __future__ import print_function
 
 from six.moves import range
 from six.moves import zip
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+import tensorflow.compat.v2 as tf2
 
 from object_detection.box_coders import faster_rcnn_box_coder
 from object_detection.box_coders import mean_stddev_box_coder
 from object_detection.core import box_coder
 from object_detection.core import box_list
 from object_detection.core import box_list_ops
+from object_detection.core import keypoint_ops
 from object_detection.core import matcher as mat
 from object_detection.core import region_similarity_calculator as sim_calc
 from object_detection.core import standard_fields as fields
 from object_detection.matchers import argmax_matcher
 from object_detection.matchers import bipartite_matcher
 from object_detection.utils import shape_utils
+from object_detection.utils import target_assigner_utils as ta_utils
+
+
+ResizeMethod = tf2.image.ResizeMethod
+
+_DEFAULT_KEYPOINT_OFFSET_STD_DEV = 1.0
 
 
 class TargetAssigner(object):

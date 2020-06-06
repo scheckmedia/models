@@ -1,3 +1,4 @@
+# Lint as: python2, python3
 # Copyright 2018 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +16,7 @@
 
 """SSDFeatureExtractor for MobilenetV2 features."""
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from object_detection.meta_architectures import ssd_meta_arch
 from object_detection.models import feature_map_generators
@@ -164,4 +165,4 @@ class SSDMobileNetV2KerasFeatureExtractor(
         'layer_15/expansion_output': image_features[0],
         'layer_19': image_features[1]})
 
-    return feature_maps.values()
+    return list(feature_maps.values())

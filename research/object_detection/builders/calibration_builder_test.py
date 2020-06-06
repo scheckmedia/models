@@ -1,3 +1,4 @@
+# Lint as: python2, python3
 # Copyright 2019 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,9 +16,13 @@
 
 """Tests for calibration_builder."""
 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 import numpy as np
 from scipy import interpolate
-import tensorflow as tf
+from six.moves import zip
+import tensorflow.compat.v1 as tf
 from object_detection.builders import calibration_builder
 from object_detection.protos import calibration_pb2
 
